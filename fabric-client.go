@@ -20,10 +20,8 @@ import (
 
 type FabricClient struct {
 	ConnectionFile []byte
-	ChannelTx      string
 	OrdererDomain  string
 	Orgs           []string
-	AnchorsTx      []string
 	OrgAdmin       string
 	UserName       string
 	ChannelId      string
@@ -62,7 +60,7 @@ func (f *FabricClient) Close() {
 	}
 }
 
-func (f *FabricClient) CreateChannel() {
+func (f *FabricClient) CreateChannel(channelTx string) {
 	mspClient, err := mspclient.New(f.sdk.Context(), mspclient.WithOrg(f.Orgs[0]))
 	if err != nil {
 		log.Println(err)
@@ -73,7 +71,7 @@ func (f *FabricClient) CreateChannel() {
 	}
 	req := resmgmt.SaveChannelRequest{
 		ChannelID:         f.ChannelId,
-		ChannelConfigPath: f.ChannelTx,
+		ChannelConfigPath: channelTx,
 		SigningIdentities: []msp.SigningIdentity{adminIdentity},
 	}
 	txId, err := f.resmgmtClients[0].SaveChannel(req, f.retry, f.orderer)
@@ -83,7 +81,7 @@ func (f *FabricClient) CreateChannel() {
 	log.Println(txId)
 }
 
-func (f *FabricClient) UpdateChannel() {
+func (f *FabricClient) UpdateChannel(anchorsTx []string) {
 
 
 	for i, c := range f.resmgmtClients {
@@ -98,7 +96,7 @@ func (f *FabricClient) UpdateChannel() {
 		}
 		req := resmgmt.SaveChannelRequest{
 			ChannelID:         f.ChannelId,
-			ChannelConfigPath: f.AnchorsTx[i],
+			ChannelConfigPath: anchorsTx[i],
 			SigningIdentities: []msp.SigningIdentity{adminIdentity},
 		}
 		txId, err := c.SaveChannel(req, f.retry, f.orderer)
@@ -281,11 +279,9 @@ func (f *FabricClient) InvokeChaincode(chaincodeId,fcn string,args [][]byte) []b
 }
 
 
-func NewFabricClient(connectionFile []byte,channelTx string,channelId string,orgs []string,anchorsTx []string,orderer string) *FabricClient {
+func NewFabricClient(connectionFile []byte,channelId string,orgs []string,orderer string) *FabricClient {
 	fabric := &FabricClient{
 		ConnectionFile:connectionFile,
-		AnchorsTx      :anchorsTx,
-		ChannelTx      :channelTx,
 		ChannelId      :channelId,
 		OrdererDomain  :orderer,
 		Orgs           :orgs,
