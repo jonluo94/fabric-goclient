@@ -142,7 +142,7 @@ func (f *FabricClient) InstallChaincode(chaincodeId,chaincodePath,version string
 
 }
 
-func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) {
+func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) []byte{
 
 	//"OR ('Org1MSP.member','Org2MSP.member')"
 	ccPolicy, err := cauthdsl.FromString(policy)
@@ -160,11 +160,11 @@ func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version st
 		},
 		f.retry,
 	)
-
-	log.Println(resp)
+	log.Println(resp.TransactionID)
+	return []byte(resp.TransactionID)
 }
 
-func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) {
+func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) []byte{
 
 	f.InstallChaincode(chaincodeId,chaincodePath,version)
 
@@ -183,7 +183,8 @@ func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string
 		},
 		f.retry,
 	)
-	log.Println(resp)
+	log.Println(resp.TransactionID)
+	return []byte(resp.TransactionID)
 }
 
 func (f *FabricClient) QueryLedger() []byte{
