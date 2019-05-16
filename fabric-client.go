@@ -18,6 +18,10 @@ import (
 	"os"
 )
 
+const (
+	Admin = "Admin"
+	User  = "User1"
+)
 type FabricClient struct {
 	ConnectionFile []byte
 	OrdererDomain  string
@@ -33,10 +37,11 @@ type FabricClient struct {
 	orderer        resmgmt.RequestOption
 }
 
-func (f *FabricClient) Setup() {
+func (f *FabricClient) Setup() error {
 	sdk, err := fabsdk.New(config.FromRaw(f.ConnectionFile,"yaml"))
 	if err != nil {
 		log.Println("failed to create SDK")
+		return err
 	}
 	f.sdk = sdk
 
@@ -52,6 +57,8 @@ func (f *FabricClient) Setup() {
 
 	f.retry = resmgmt.WithRetry(retry.DefaultResMgmtOpts)
 	f.orderer = resmgmt.WithOrdererEndpoint(f.OrdererDomain)
+
+	return nil
 }
 
 func (f *FabricClient) Close() {
@@ -60,14 +67,16 @@ func (f *FabricClient) Close() {
 	}
 }
 
-func (f *FabricClient) CreateChannel(channelTx string) {
+func (f *FabricClient) CreateChannel(channelTx string) error{
 	mspClient, err := mspclient.New(f.sdk.Context(), mspclient.WithOrg(f.Orgs[0]))
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 	adminIdentity, err := mspClient.GetSigningIdentity(f.OrgAdmin)
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 	req := resmgmt.SaveChannelRequest{
 		ChannelID:         f.ChannelId,
@@ -77,11 +86,13 @@ func (f *FabricClient) CreateChannel(channelTx string) {
 	txId, err := f.resmgmtClients[0].SaveChannel(req, f.retry, f.orderer)
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 	log.Println(txId)
+	return nil
 }
 
-func (f *FabricClient) UpdateChannel(anchorsTx []string) {
+func (f *FabricClient) UpdateChannel(anchorsTx []string) error{
 
 
 	for i, c := range f.resmgmtClients {
@@ -89,10 +100,12 @@ func (f *FabricClient) UpdateChannel(anchorsTx []string) {
 		mspClient, err := mspclient.New(f.sdk.Context(), mspclient.WithOrg(f.Orgs[i]))
 		if err != nil {
 			log.Println(err)
+			return err
 		}
 		adminIdentity, err := mspClient.GetSigningIdentity(f.OrgAdmin)
 		if err != nil {
 			log.Println(err)
+			return err
 		}
 		req := resmgmt.SaveChannelRequest{
 			ChannelID:         f.ChannelId,
@@ -102,27 +115,33 @@ func (f *FabricClient) UpdateChannel(anchorsTx []string) {
 		txId, err := c.SaveChannel(req, f.retry, f.orderer)
 		if err != nil {
 			log.Println(err)
+			return err
 		}
 		log.Println(txId)
 	}
+
+	return nil
 }
 
-func (f *FabricClient) JoinChannel() {
+func (f *FabricClient) JoinChannel() error{
 
 	for i, c := range f.resmgmtClients {
 		err := c.JoinChannel(f.ChannelId, f.retry, f.orderer)
 		if err != nil {
 			log.Printf("Org peers failed to JoinChannel: %s", err)
+			return err
 		}
 		log.Println(f.Orgs[i], " join channel")
 	}
+	return nil
 
 }
 
-func (f *FabricClient) InstallChaincode(chaincodeId,chaincodePath,version string) {
+func (f *FabricClient) InstallChaincode(chaincodeId,chaincodePath,version string) error{
 	ccPkg, err := gopackager.NewCCPackage(chaincodePath, f.GoPath)
 	if err != nil {
 		log.Println(err)
+		return err
 	}
 
 	req := resmgmt.InstallCCRequest{
@@ -136,18 +155,21 @@ func (f *FabricClient) InstallChaincode(chaincodeId,chaincodePath,version string
 		res, err := c.InstallCC(req, f.retry)
 		if err != nil {
 			log.Println(err)
+			return err
 		}
 		log.Println(res)
 	}
 
+	return nil
 }
 
-func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) []byte{
+func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) ([]byte,error){
 
 	//"OR ('Org1MSP.member','Org2MSP.member')"
 	ccPolicy, err := cauthdsl.FromString(policy)
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	resp, err := f.resmgmtClients[0].InstantiateCC(
 		f.ChannelId,
@@ -161,16 +183,17 @@ func (f *FabricClient) InstantiateChaincode(chaincodeId,chaincodePath,version st
 		f.retry,
 	)
 	log.Println(resp.TransactionID)
-	return []byte(resp.TransactionID)
+	return []byte(resp.TransactionID),nil
 }
 
-func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) []byte{
+func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string, policy string, args [][]byte) ([]byte,error){
 
 	f.InstallChaincode(chaincodeId,chaincodePath,version)
 
 	ccPolicy, err := cauthdsl.FromString(policy)
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	resp, err := f.resmgmtClients[0].UpgradeCC(
 		f.ChannelId,
@@ -184,34 +207,38 @@ func (f *FabricClient) UpgradeChaincode(chaincodeId,chaincodePath,version string
 		f.retry,
 	)
 	log.Println(resp.TransactionID)
-	return []byte(resp.TransactionID)
+	return []byte(resp.TransactionID),nil
 }
 
-func (f *FabricClient) QueryLedger() []byte{
+func (f *FabricClient) QueryLedger() ([]byte,error){
 
 	ledger, err := ledger.New(f.sdk.ChannelContext(f.ChannelId, fabsdk.WithUser(f.UserName), fabsdk.WithOrg(f.Orgs[0])))
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 
 	bci, err := ledger.QueryInfo()
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	bcis,err := json.Marshal(bci.BCI)
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	log.Println(string(bcis))
-	return bcis
+	return bcis,nil
 }
 
 
-func (f *FabricClient) QueryChaincode(chaincodeId,fcn string,args [][]byte) []byte{
+func (f *FabricClient) QueryChaincode(chaincodeId,fcn string,args [][]byte) ([]byte,error){
 
 	client, err := channel.New(f.sdk.ChannelContext(f.ChannelId, fabsdk.WithUser(f.UserName), fabsdk.WithOrg(f.Orgs[0])))
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 
 	resp, err := client.Query(channel.Request{
@@ -221,23 +248,26 @@ func (f *FabricClient) QueryChaincode(chaincodeId,fcn string,args [][]byte) []by
 	})
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	log.Println(string(resp.Payload))
-	return resp.Payload
+	return resp.Payload,nil
 }
 
 
-func (f *FabricClient) InvokeChaincodeWithEvent(chaincodeId,fcn string,args [][]byte) []byte{
+func (f *FabricClient) InvokeChaincodeWithEvent(chaincodeId,fcn string,args [][]byte) ([]byte,error){
 	eventId := fmt.Sprintf("event%d",time.Now().UnixNano())
 
 	client, err := channel.New(f.sdk.ChannelContext(f.ChannelId, fabsdk.WithUser(f.UserName), fabsdk.WithOrg(f.Orgs[0])))
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	// 注册事件
 	reg, notifier, err := client.RegisterChaincodeEvent(chaincodeId, eventId)
 	if err != nil {
 		log.Printf("注册链码事件失败: %s", err)
+		return nil,err
 	}
 	defer client.UnregisterChaincodeEvent(reg)
 
@@ -249,23 +279,26 @@ func (f *FabricClient) InvokeChaincodeWithEvent(chaincodeId,fcn string,args [][]
 	resp, err := client.Execute(req)
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 
 	select {
 	case ccEvent := <-notifier:
 		log.Printf("接收到链码事件: %v\n", ccEvent)
-	     return []byte(ccEvent.TxID)
+	     return []byte(ccEvent.TxID),nil
 	case <-time.After(time.Second * 30):
 		log.Println("不能根据指定的事件ID接收到相应的链码事件")
+		return nil,fmt.Errorf("%s","等到事件超时")
 	}
-	return []byte(resp.TransactionID)
+	return []byte(resp.TransactionID),nil
 }
 
-func (f *FabricClient) InvokeChaincode(chaincodeId,fcn string,args [][]byte) []byte{
+func (f *FabricClient) InvokeChaincode(chaincodeId,fcn string,args [][]byte) ([]byte,error){
 
 	client, err := channel.New(f.sdk.ChannelContext(f.ChannelId, fabsdk.WithUser(f.UserName), fabsdk.WithOrg(f.Orgs[0])))
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
 	req := channel.Request{
 		ChaincodeID: chaincodeId,
@@ -275,8 +308,9 @@ func (f *FabricClient) InvokeChaincode(chaincodeId,fcn string,args [][]byte) []b
 	resp, err := client.Execute(req)
 	if err != nil {
 		log.Println(err)
+		return nil,err
 	}
-	return []byte(resp.TransactionID)
+	return []byte(resp.TransactionID),nil
 }
 
 
@@ -286,8 +320,8 @@ func NewFabricClient(connectionFile []byte,channelId string,orgs []string,ordere
 		ChannelId      :channelId,
 		OrdererDomain  :orderer,
 		Orgs           :orgs,
-		OrgAdmin       :"Admin",
-		UserName       :"User1",
+		OrgAdmin       :Admin,
+		UserName       :User,
 		GoPath         :os.Getenv("GOPATH"),
 	}
 
