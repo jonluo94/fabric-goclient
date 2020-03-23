@@ -11,10 +11,10 @@ import (
 	"reflect"
 
 	"github.com/golang/protobuf/proto"
+	common "github.com/hyperledger/fabric-protos-go/common"
+	mb "github.com/hyperledger/fabric-protos-go/msp"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/logging"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/providers/fab"
-	common "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
-	mb "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/msp"
 	"github.com/pkg/errors"
 )
 
@@ -75,16 +75,16 @@ func (c *peerGroupResolver) Resolve(peers []fab.Peer) (PeerGroup, error) {
 	if logging.IsEnabledFor(loggerModule, logging.DEBUG) {
 		var s string
 		if len(peerGroups) == 0 {
-			s = "\n\n***** No Available Peer Groups\n"
+			s = "  ***** No Available Peer Groups "
 		} else {
-			s = "\n\n***** Available Peer Groups:\n"
+			s = "  ***** Available Peer Groups: "
 			for i, grp := range peerGroups {
 				s += fmt.Sprintf("%d - %+v", i, grp)
 				if i+1 < len(peerGroups) {
-					s += fmt.Sprintf(" OR\n")
+					s += fmt.Sprintf(" OR ")
 				}
 			}
-			s += fmt.Sprintf("\n")
+			s += fmt.Sprintf(" ")
 		}
 		logger.Debugf(s)
 	}
@@ -103,14 +103,14 @@ func (c *peerGroupResolver) getPeerGroups(peerRetriever MSPPeerRetriever) ([]Pee
 	mspGroups := groupHierarchy.Reduce()
 
 	if logging.IsEnabledFor(loggerModule, logging.DEBUG) {
-		s := "\n***** Org Groups:\n"
+		s := " ***** Org Groups: "
 		for i, g := range mspGroups {
 			s += fmt.Sprintf("%+v", g)
 			if i+1 < len(mspGroups) {
-				s += fmt.Sprintf("  OR\n")
+				s += fmt.Sprintf("  OR ")
 			}
 		}
-		s += fmt.Sprintf("\n")
+		s += fmt.Sprintf(" ")
 		logger.Debugf(s)
 	}
 

@@ -13,7 +13,6 @@ import (
 	"go/build"
 	"io"
 	"os"
-	"path"
 	"path/filepath"
 	"time"
 
@@ -25,7 +24,7 @@ import (
 
 	"strings"
 
-	pb "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/peer"
+	pb "github.com/hyperledger/fabric-protos-go/peer"
 )
 
 // Descriptor ...
@@ -58,7 +57,7 @@ func NewCCPackage(chaincodePath string, goPath string) (*resource.CCPackage, err
 		logger.Debugf("Default GOPATH=%s", gp)
 	}
 
-	projDir = path.Join(gp, "src", chaincodePath)
+	projDir = filepath.Join(gp, "src", chaincodePath)
 
 	logger.Debugf("projDir variable=%s", projDir)
 

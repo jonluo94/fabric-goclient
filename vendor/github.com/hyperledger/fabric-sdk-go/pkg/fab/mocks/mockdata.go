@@ -12,17 +12,17 @@ import (
 	"github.com/golang/protobuf/proto"
 	"github.com/golang/protobuf/ptypes/timestamp"
 
+	"github.com/hyperledger/fabric-protos-go/common"
+	mb "github.com/hyperledger/fabric-protos-go/msp"
+	ab "github.com/hyperledger/fabric-protos-go/orderer"
+	pp "github.com/hyperledger/fabric-protos-go/peer"
 	cutil "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/common/util"
-	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/common"
-	mb "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/msp"
-	ab "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/orderer"
-	pp "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/peer"
-	"github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/protos/utils"
+	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/protoutil"
 
 	"time"
 
 	channelConfig "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/common/channelconfig"
-	ledger_util "github.com/hyperledger/fabric-sdk-go/third_party/github.com/hyperledger/fabric/core/ledger/util"
+	ledger_util "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/core/ledger/util"
 	"github.com/pkg/errors"
 )
 
@@ -64,6 +64,7 @@ type MockConfigGroupBuilder struct {
 	ChannelCapabilities     []string
 	ApplicationCapabilities []string
 	OrdererCapabilities     []string
+	PolicyRefs              []string
 }
 
 // MockConfigBlockBuilder is used to build a mock Chain configuration block
@@ -217,14 +218,12 @@ func (b *MockConfigGroupBuilder) buildOrdererGroup() *common.ConfigGroup {
 			"Admins":          b.buildBasicConfigPolicy(),
 		},
 		Values: map[string]*common.ConfigValue{
-			channelConfig.BatchSizeKey:                 b.buildBatchSizeConfigValue(),
-			channelConfig.AnchorPeersKey:               b.buildAnchorPeerConfigValue(),
-			channelConfig.ConsensusTypeKey:             b.buildConsensusTypeConfigValue(),
-			channelConfig.BatchTimeoutKey:              b.buildBatchTimeoutConfigValue(),
-			channelConfig.ChannelRestrictionsKey:       b.buildChannelRestrictionsConfigValue(),
-			channelConfig.HashingAlgorithmKey:          b.buildHashingAlgorithmConfigValue(),
-			channelConfig.BlockDataHashingStructureKey: b.buildBlockDataHashingStructureConfigValue(),
-			channelConfig.CapabilitiesKey:              b.buildCapabilitiesConfigValue(b.OrdererCapabilities),
+			channelConfig.ConsensusTypeKey:       b.buildConsensusTypeConfigValue(),
+			channelConfig.BatchSizeKey:           b.buildBatchSizeConfigValue(),
+			channelConfig.BatchTimeoutKey:        b.buildBatchTimeoutConfigValue(),
+			channelConfig.ChannelRestrictionsKey: b.buildChannelRestrictionsConfigValue(),
+			channelConfig.CapabilitiesKey:        b.buildCapabilitiesConfigValue(b.OrdererCapabilities),
+			channelConfig.KafkaBrokersKey:        b.buildKafkaBrokersConfigValue(),
 		},
 		Version:   b.Version,
 		ModPolicy: b.ModPolicy,
@@ -262,13 +261,6 @@ func (b *MockConfigGroupBuilder) buildBatchSizeConfigValue() *common.ConfigValue
 		Value:     marshalOrPanic(b.buildBatchSize())}
 }
 
-func (b *MockConfigGroupBuilder) buildAnchorPeerConfigValue() *common.ConfigValue {
-	return &common.ConfigValue{
-		Version:   b.Version,
-		ModPolicy: b.ModPolicy,
-		Value:     marshalOrPanic(b.buildAnchorPeer())}
-}
-
 func (b *MockConfigGroupBuilder) buildConsensusTypeConfigValue() *common.ConfigValue {
 	return &common.ConfigValue{
 		Version:   b.Version,
@@ -290,25 +282,25 @@ func (b *MockConfigGroupBuilder) buildChannelRestrictionsConfigValue() *common.C
 		Value:     marshalOrPanic(b.buildChannelRestrictions())}
 }
 
-func (b *MockConfigGroupBuilder) buildHashingAlgorithmConfigValue() *common.ConfigValue {
-	return &common.ConfigValue{
-		Version:   b.Version,
-		ModPolicy: b.ModPolicy,
-		Value:     marshalOrPanic(b.buildHashingAlgorithm())}
-}
-
-func (b *MockConfigGroupBuilder) buildBlockDataHashingStructureConfigValue() *common.ConfigValue {
-	return &common.ConfigValue{
-		Version:   b.Version,
-		ModPolicy: b.ModPolicy,
-		Value:     marshalOrPanic(b.buildBlockDataHashingStructure())}
-}
-
 func (b *MockConfigGroupBuilder) buildCapabilitiesConfigValue(capabilityNames []string) *common.ConfigValue {
 	return &common.ConfigValue{
 		Version:   b.Version,
 		ModPolicy: b.ModPolicy,
 		Value:     marshalOrPanic(b.buildCapabilities(capabilityNames))}
+}
+
+func (b *MockConfigGroupBuilder) buildKafkaBrokersConfigValue() *common.ConfigValue {
+	return &common.ConfigValue{
+		Version:   b.Version,
+		ModPolicy: b.ModPolicy,
+		Value:     marshalOrPanic(b.buildKafkaBrokers())}
+}
+
+func (b *MockConfigGroupBuilder) buildACLsConfigValue(policyRefs []string) *common.ConfigValue {
+	return &common.ConfigValue{
+		Version:   b.Version,
+		ModPolicy: b.ModPolicy,
+		Value:     marshalOrPanic(b.buildACLs(policyRefs))}
 }
 
 func (b *MockConfigGroupBuilder) buildBatchSize() *ab.BatchSize {
@@ -319,16 +311,10 @@ func (b *MockConfigGroupBuilder) buildBatchSize() *ab.BatchSize {
 	}
 }
 
-func (b *MockConfigGroupBuilder) buildAnchorPeer() *pp.AnchorPeers {
-	ap := pp.AnchorPeer{Host: "sample-host", Port: 22}
-	return &pp.AnchorPeers{
-		AnchorPeers: []*pp.AnchorPeer{&ap},
-	}
-}
-
 func (b *MockConfigGroupBuilder) buildConsensusType() *ab.ConsensusType {
 	return &ab.ConsensusType{
-		Type: "sample-Consensus-Type",
+		Type:  "kafka",
+		State: ab.ConsensusType_STATE_NORMAL,
 	}
 }
 
@@ -344,18 +330,6 @@ func (b *MockConfigGroupBuilder) buildChannelRestrictions() *ab.ChannelRestricti
 	}
 }
 
-func (b *MockConfigGroupBuilder) buildHashingAlgorithm() *common.HashingAlgorithm {
-	return &common.HashingAlgorithm{
-		Name: "SHA2",
-	}
-}
-
-func (b *MockConfigGroupBuilder) buildBlockDataHashingStructure() *common.BlockDataHashingStructure {
-	return &common.BlockDataHashingStructure{
-		Width: 64,
-	}
-}
-
 func (b *MockConfigGroupBuilder) buildCapabilities(capabilityNames []string) *common.Capabilities {
 	capabilities := make(map[string]*common.Capability)
 	for _, capability := range capabilityNames {
@@ -363,6 +337,23 @@ func (b *MockConfigGroupBuilder) buildCapabilities(capabilityNames []string) *co
 	}
 	return &common.Capabilities{
 		Capabilities: capabilities,
+	}
+}
+
+func (b *MockConfigGroupBuilder) buildKafkaBrokers() *ab.KafkaBrokers {
+	brokers := []string{"kafkabroker"}
+	return &ab.KafkaBrokers{
+		Brokers: brokers,
+	}
+}
+
+func (b *MockConfigGroupBuilder) buildACLs(policyRefs []string) *pp.ACLs {
+	acls := make(map[string]*pp.APIResource)
+	for _, policyRef := range policyRefs {
+		acls[policyRef] = &pp.APIResource{PolicyRef: policyRef}
+	}
+	return &pp.ACLs{
+		Acls: acls,
 	}
 }
 
@@ -430,9 +421,8 @@ func (b *MockConfigGroupBuilder) buildApplicationGroup() *common.ConfigGroup {
 			"Readers": b.buildSignatureConfigPolicy(),
 		},
 		Values: map[string]*common.ConfigValue{
-			channelConfig.BatchSizeKey:    b.buildBatchSizeConfigValue(),
 			channelConfig.CapabilitiesKey: b.buildCapabilitiesConfigValue(b.ApplicationCapabilities),
-			// TODO: More
+			channelConfig.ACLsKey:         b.buildACLsConfigValue(b.PolicyRefs),
 		},
 		Version:   b.Version,
 		ModPolicy: b.ModPolicy,
@@ -513,7 +503,7 @@ func CreateBlockWithCCEventAndTxStatus(events *pp.ChaincodeEvent, txID string,
 		},
 		ChannelId: channelID,
 		TxId:      txID}
-	hdr := &common.Header{ChannelHeader: utils.MarshalOrPanic(chdr)}
+	hdr := &common.Header{ChannelHeader: protoutil.MarshalOrPanic(chdr)}
 	payload := &common.Payload{Header: hdr}
 	cea := &pp.ChaincodeEndorsedAction{}
 	ccaPayload := &pp.ChaincodeActionPayload{Action: cea}
@@ -526,27 +516,27 @@ func CreateBlockWithCCEventAndTxStatus(events *pp.ChaincodeEvent, txID string,
 	pHashBytes := []byte("proposal_hash")
 	pResponse := &pp.Response{Status: 200}
 	results := []byte("results")
-	eventBytes, err := utils.GetBytesChaincodeEvent(events)
+	eventBytes, err := protoutil.GetBytesChaincodeEvent(events)
 	if err != nil {
 		return nil, err
 	}
-	ccaPayload.Action.ProposalResponsePayload, err = utils.GetBytesProposalResponsePayload(pHashBytes, pResponse, results, eventBytes, nil)
+	ccaPayload.Action.ProposalResponsePayload, err = protoutil.GetBytesProposalResponsePayload(pHashBytes, pResponse, results, eventBytes, nil)
 	if err != nil {
 		return nil, err
 	}
-	tx.Actions[0].Payload, err = utils.GetBytesChaincodeActionPayload(ccaPayload)
+	tx.Actions[0].Payload, err = protoutil.GetBytesChaincodeActionPayload(ccaPayload)
 	if err != nil {
 		return nil, err
 	}
-	payload.Data, err = utils.GetBytesTransaction(tx)
+	payload.Data, err = protoutil.GetBytesTransaction(tx)
 	if err != nil {
 		return nil, err
 	}
-	env.Payload, err = utils.GetBytesPayload(payload)
+	env.Payload, err = protoutil.GetBytesPayload(payload)
 	if err != nil {
 		return nil, err
 	}
-	ebytes, err := utils.GetBytesEnvelope(env)
+	ebytes, err := protoutil.GetBytesEnvelope(env)
 	if err != nil {
 		return nil, err
 	}

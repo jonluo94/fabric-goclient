@@ -10,8 +10,8 @@ import (
 	"context"
 	"sync"
 
+	"github.com/hyperledger/fabric-protos-go/discovery"
 	discclient "github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/discovery/client"
-	"github.com/hyperledger/fabric-sdk-go/internal/github.com/hyperledger/fabric/protos/discovery"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/errors/multi"
 	"github.com/hyperledger/fabric-sdk-go/pkg/common/logging"
 	fabcontext "github.com/hyperledger/fabric-sdk-go/pkg/common/providers/context"
@@ -58,7 +58,7 @@ type Response interface {
 // given set of peers. A set of successful responses is returned and/or an error
 // is returned from each of the peers that was unsuccessful (note that if more than one peer returned
 // an error then the returned error may be cast to multi.Errors).
-func (c *Client) Send(ctx context.Context, req *discclient.Request, targets ...fab.PeerConfig) ([]Response, error) {
+func (c *Client) Send(ctx context.Context, req *Request, targets ...fab.PeerConfig) ([]Response, error) {
 	if len(targets) == 0 {
 		return nil, errors.New("no targets specified")
 	}
@@ -74,7 +74,7 @@ func (c *Client) Send(ctx context.Context, req *discclient.Request, targets ...f
 		go func(target fab.PeerConfig) {
 			defer wg.Done()
 
-			resp, err := c.send(ctx, req, target)
+			resp, err := c.send(ctx, req.r, target)
 			lock.Lock()
 			if err != nil {
 				errs = multi.Append(errs, errors.WithMessage(err, "From target: "+target.URL))
